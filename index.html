@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HomePaw LifeFit AI</title>
+<style>
+:root{--bg:#f6f2e9;--card:#fffdf8;--tx:#3a3a34;--mut:#7a766c;--g:#5f8f6a;--gl:#e3eedf;--w:#b8693f;--bd:#e4dccb;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1f211e;--card:#2a2d29;--tx:#ece8de;--mut:#a9a597;--g:#8fbf9a;--gl:#33413a;--w:#e0a07c;--bd:#3d403a}}
+:root[data-theme="dark"]{--bg:#1f211e;--card:#2a2d29;--tx:#ece8de;--mut:#a9a597;--g:#8fbf9a;--gl:#33413a;--w:#e0a07c;--bd:#3d403a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.65 system-ui,"Noto Sans TC","PingFang TC",sans-serif}
+main{max-width:960px;margin:0 auto;padding:12px 14px 60px}
+h1{font-size:24px;margin:0 0 4px}h2{font-size:18px;margin:20px 0 8px}h3{font-size:15px;margin:0 0 4px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin:10px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}.grid .card{margin:0}
+.m{color:var(--mut);font-size:13px;margin:2px 0 8px}
+.tag{font-size:12px;background:var(--gl);color:var(--g);border-radius:99px;padding:1px 8px;white-space:nowrap}
+.tag.h{background:#f6dccd;color:#a4501f}.tag.mid{background:#f3e9c2;color:#7a6410}
+button,.b{font:inherit;border:0;border-radius:10px;padding:9px 14px;background:var(--g);color:#fff;cursor:pointer;margin:2px 4px 2px 0}
+.b2{background:var(--gl);color:var(--g)}.b3{background:transparent;color:var(--w);border:1px solid var(--bd)}
+button.on{outline:2px solid var(--w)}
+nav{position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);z-index:5;padding:8px 10px;border-bottom:1px solid var(--bd);overflow-x:auto;white-space:nowrap}
+nav button{background:transparent;color:var(--tx);padding:6px 10px}nav button.cur{background:var(--g);color:#fff}
+label{display:block;font-size:13px;color:var(--mut);margin-top:8px}
+input,select,textarea{font:inherit;width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx)}
+input[type=checkbox]{width:auto}input[type=range]{padding:0}
+.warn{background:#fbeede;border:1px solid #e6c9a3;color:#7b4a14;border-radius:10px;padding:8px 12px;font-size:13px;margin:8px 0}
+img,video{max-width:100%;border-radius:10px}.ph{position:relative;display:inline-block;cursor:crosshair}
+.dot{position:absolute;transform:translate(-50%,-50%);background:var(--w);color:#fff;font-size:11px;padding:1px 6px;border-radius:99px;pointer-events:none}
+.bar{height:10px;background:var(--gl);border-radius:9px;overflow:hidden}.bar i{display:block;height:100%;background:var(--g)}
+canvas{width:100%;height:360px;border-radius:12px;touch-action:none;display:block}
+#tour{position:fixed;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));max-width:620px;margin:0 auto;background:var(--card);border:2px solid var(--g);border-radius:14px;padding:10px 14px;z-index:8;box-shadow:0 4px 16px rgba(0,0,0,.18)}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--tx);color:var(--bg);padding:8px 16px;border-radius:99px;display:none;z-index:9}
+table{border-collapse:collapse;width:100%;font-size:13px}td,th{border:1px solid var(--bd);padding:4px 8px;text-align:left}
+</style></head><body>
+<div id="app"></div><div id="toast"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ===== 規則門檻集中管理：以下數值為未經驗證的規劃參考值，非醫療或安全標準 =====
+const T={comfortRise:{'正常':60,'稍受限':35,'明顯受限':20},stepRise:15,stepDepth:30,stepWidth:40,rampRatio:2.5,aisleMin:40};
+const OBS=['行走時步伐順暢','上沙發前停頓或猶豫','下沙發時猶豫','需要助跑或多次嘗試','落地動作僵硬','光滑地面行走不穩'];
+const NEEDS=['高齡活動受限','後肢癱瘓','截肢','失明','其他已知行動限制'];
+const STEPS=[['home','首頁'],['profile','LifeFit'],['video','VideoFit'],['space','SpaceFit'],['engine','建議引擎'],['sim','3D 模擬'],['report','報告'],['track','追蹤']];
+const DEF={cats:[
+{id:'mochi',name:'Mochi',breed:'米克斯',age:12,weight:4.5,size:'中小型',leg:'',ability:'稍受限',dx:'尚未提供獸醫診斷結果',needs:['高齡活動受限'],obs:[1,2],demo:true},
+{id:'kiki',name:'Kiki',breed:'米克斯',age:3,weight:4.2,size:'中型',leg:'',ability:'正常',dx:'',needs:[],obs:[0],demo:true}],
+cur:'mochi',space:{sofaH:45,sofaW:180,aisle:70,free:80,floor:'光滑'},plan:{},done:{},log:{}};
+const LS='homepaw-v1';let S;try{S=JSON.parse(localStorage.getItem(LS))}catch(x){}
+S=S&&S.cats?S:JSON.parse(JSON.stringify(DEF));
+const P={marks:[],mt:'沙發',shots:{},after:{}};let PG='home',G={items:[],sel:-1,cat:null};
+const $=i=>document.getElementById(i),e=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const save=()=>{try{localStorage.setItem(LS,JSON.stringify(S))}catch(x){}};
+const cat=()=>S.cats.find(c=>c.id===S.cur)||S.cats[0];
+const toast=t=>{const o=$('toast');o.textContent=t;o.style.display='block';setTimeout(()=>o.style.display='none',2200)};
+
+// ===== Pet Accessibility Engine =====
+function evalCat(c,s){
+ const R=[],lim=T.comfortRise[c.ability],hes=c.obs.some(i=>[1,2,3].includes(i));
+ const special=c.needs.length>0||c.ability!=='正常'||hes,n=Math.max(1,Math.ceil(s.sofaH/T.stepRise)-1);
+ const ob=c.obs.map(i=>OBS[i]).join('、')||'無';
+ if(s.sofaH>lim&&special){
+  R.push({id:'step',obj:'step',prio:'高',title:'沙發旁加裝低踏階',problem:`沙發高 ${s.sofaH} 公分，高於系統對「${c.ability}」設定的參考高度 ${lim} 公分。`,evidence:`沙發高度（手動輸入）、活動能力「${c.ability}」、飼主觀察：${ob}`,fix:`放置約 ${n} 階的低踏階（每階約 ${T.stepRise} 公分），讓貓咪分段上下。`,why:'把一次大跳躍拆成多次小動作，降低單次負擔。',confirm:'確認踏階穩固不晃動、表面防滑，貓咪願意自行使用；不要強迫貓咪跳躍。',vet:true});
+  const L=Math.round(s.sofaH*T.rampRatio),ok=L<=s.free;
+  R.push({id:'ramp',obj:'ramp',prio:ok?'中':'低',title:ok?'替代方案：寵物斜坡':'斜坡：目前空間可能不足',problem:`斜坡約需 ${L} 公分長度（比例 1:${T.rampRatio}），可用地面空間 ${s.free} 公分。`,evidence:'沙發高度、沙發旁可用空間（手動輸入）',fix:ok?`在沙發旁放置長約 ${L} 公分的斜坡。`:'空間不足時建議優先考慮踏階，或調整家具擺位。',why:'部分貓咪較習慣連續坡面，但需要較長的空間。',confirm:'實際量測可用空間與斜坡角度，並確認坡面防滑。',vet:false});
+ }
+ if(s.floor==='光滑')R.push({id:'mat',obj:'mat',prio:special?'中':'低',title:special?'踏階前方鋪設防滑墊':'可選：光滑地板鋪防滑墊',problem:'地板材質光滑，起跳與落地時可能較難抓地。',evidence:'地板材質（手動輸入）'+(special?`；飼主觀察：${ob}`:''),fix:'在起跳／落地區鋪設約 60×40 公分防滑墊。',why:'增加摩擦，讓行動更穩定。',confirm:'確認墊子邊緣不翹起、不會滑動。',vet:false});
+ if(s.aisle<T.aisleMin)R.push({id:'aisle',prio:'高',title:'通道偏窄',problem:`通道寬度 ${s.aisle} 公分，低於參考值 ${T.aisleMin} 公分。`,evidence:'通道寬度（手動輸入）',fix:'移動雜物或家具，讓貓咪動線更順暢。',why:'狹窄通道會增加碰撞與猶豫。',confirm:'實際量測並觀察貓咪通過情形。',vet:false});
+ if(special&&(!c.dx||/尚未/.test(c.dx)))R.push({id:'vet',prio:'高',title:'建議諮詢獸醫',problem:'飼主觀察到行動猶豫，但尚無獸醫診斷。',evidence:`飼主觀察：${ob}；診斷：${c.dx||'未填'}`,fix:'預約獸醫檢查，帶上 VideoFit 影片與觀察紀錄。',why:'行為觀察無法判斷原因，本系統不做診斷。',confirm:'由獸醫判斷是否有疼痛或其他健康問題。',vet:true});
+ if(!R.length)R.push({id:'ok',prio:'低',title:'目前無明顯需改善項目',problem:'依輸入資料，現有環境尚在參考範圍內。',evidence:`沙發高 ${s.sofaH} 公分、活動能力「${c.ability}」`,fix:'持續觀察，狀況改變時重新分析。',why:'規則未觸發。',confirm:'如有新的行動變化請更新資料。',vet:false});
+ return R;
+}
+const recs=c=>evalCat(c||cat(),S.space),PT={'高':'h','中':'mid','低':''};
+const recCard=r=>`<div class=card><h3>${e(r.title)} <span class="tag ${PT[r.prio]}">優先：${r.prio}</span>${r.vet?' <span class="tag h">建議諮詢獸醫</span>':''}</h3><p><b>問題：</b>${e(r.problem)}<br><b>觀察依據：</b>${e(r.evidence)}<br><b>建議：</b>${e(r.fix)}<br><b>原因：</b>${e(r.why)}<br><b>需人工確認：</b>${e(r.confirm)}</p></div>`;
+
+// ===== 導航 =====
+function go(p){PG=p;if(G.raf)cancelAnimationFrame(G.raf);G.raf=0;if(p==='sim')initItems();render();scrollTo(0,0);if(p==='sim')initSim()}
+function pick(id){S.cur=id;save();go(PG)}
+function addCat(){const id='c'+Date.now();S.cats.push({id,name:'新貓咪',breed:'米克斯',age:3,weight:4,size:'中型',leg:'',ability:'正常',dx:'',needs:[],obs:[]});S.cur=id;save();go('profile')}
+function nxt(){const i=STEPS.findIndex(s=>s[0]===PG);return i<STEPS.length-1?`<button onclick="go('${STEPS[i+1][0]}')">下一步：${STEPS[i+1][1]} →</button>`:''}
+function upd(k,v,num){cat()[k]=num?+v:v;save()}
+function tgl(k,i){const a=cat()[k],j=a.indexOf(i);j<0?a.push(i):a.splice(j,1);save()}
+function updS(k,v,num){S.space[k]=num?+v:v;save()}
+const fld=(l,k,t='text')=>`<label>${l}<input type=${t} value="${e(cat()[k])}" oninput="upd('${k}',this.value,${t==='number'})"></label>`;
+const sel=(l,k,o)=>`<label>${l}<select onchange="upd('${k}',this.value)">${o.map(x=>`<option ${cat()[k]===x?'selected':''}>${x}</option>`).join('')}</select></label>`;
+const sp=(l,k)=>`<label>${l}<input type=number value="${S.space[k]}" oninput="updS('${k}',this.value,1)"></label>`;
+function tasks(c){return recs(c).filter(r=>r.obj||r.id==='vet'||r.id==='aisle').map(r=>({k:c.id+'-'+r.id,t:r.title}))}
+
+// ===== 頁面 =====
+const V={
+home(){const c=cat(),t=tasks(c),d=t.filter(x=>S.done[x.k]).length,pc=t.length?Math.round(d/t.length*100):0;
+return `<div class=card><h1>HomePaw LifeFit AI</h1><p><b>Every Cat Deserves a Home That Fits.</b></p><p class=m>同一個居家空間，針對不同貓咪，產生不同的改善建議。</p><div class=warn>本站為競賽原型：使用示範資料，所有分析皆為規則運算，非獸醫診斷。影像僅在您的瀏覽器內處理，不會上傳。</div><button onclick="go('profile')">開始我的居家適配分析</button><button class=b2 onclick="startTour()">▶ 範例導覽（Mochi）</button></div>
+<div class=card style="border-color:var(--g)"><h3>📋 評審速覽（約 2 分鐘）</h3><ol class=m style="color:var(--tx)"><li>建議先按「範例導覽」，依序看 Mochi 案例。</li><li>核心創新：同一空間、不同貓咪，產生不同的改善建議（見下表）。</li><li>完整流程：LifeFit → VideoFit → SpaceFit → 建議引擎 → 3D 模擬 → 報告 → 追蹤。</li></ol><button onclick="startTour()">▶ 開始範例導覽</button><button class=b2 onclick="S.cur='mochi';go('engine')">直接看個體化對照</button></div>
+<div class=card><h3>核心創新：同一空間，不同建議</h3><p class=m>空間：沙發高 ${S.space.sofaH} 公分、地板${S.space.floor}</p>${cmp()}</div>
+<details class=card open><summary><b>功能完成度（誠實揭露）</b></summary><table><tr><th>狀態</th><th>項目</th></tr><tr><td>✅ 可運作</td><td>LifeFit Profile、SpaceFit 手動尺寸與標記、規則引擎、3D 改造模擬、改善報告、改善追蹤、本機儲存</td></tr><tr><td>🟡 Demo</td><td>VideoFit 觀察（飼主手動勾選，非 AI 分析）、Mochi 與 Kiki 示範資料</td></tr><tr><td>⏳ 尚未串接</td><td>影片 AI 模型、後端 API、AR Quick Look／Scene Viewer、LiDAR、照片合成預覽</td></tr></table></details>
+<details class=card><summary><b>動物福利與資料倫理</b></summary><ul class=m style="color:var(--tx)"><li>不做獸醫診斷，不依照片或品種判定疾病，不保證成效或安全。</li><li>每項建議標示需人工確認事項與是否建議諮詢獸醫。</li><li>不強迫貓咪跳躍；提醒觀察貓咪是否願意使用。</li><li>影片與照片只在瀏覽器內處理，不上傳第三方；僅在使用者選檔或拍照時才使用相機。</li><li>使用合成示範資料，未使用任何第三方品牌商標或素材。</li></ul></details>
+<h2>貓咪資料</h2><div class=grid>${S.cats.map(x=>`<div class=card><b>${e(x.name)}</b>${x.demo?' <span class=tag>示範資料</span>':''}<p class=m>${e(x.breed)}・${x.age} 歲・${x.weight} 公斤・活動能力${x.ability}</p><button class=b2 onclick="pick('${x.id}')">${x.id===S.cur?'目前選取':'選取'}</button></div>`).join('')}<div class=card><b>＋ 建立新貓咪</b><p class=m>建立新的 LifeFit Profile</p><button class=b2 onclick="addCat()">建立</button></div></div>
+<h2>最近的改善建議（${e(c.name)}）</h2>${recs(c).slice(0,3).map(recCard).join('')}<button class=b2 onclick="go('engine')">查看全部建議</button>
+<h2>改善追蹤進度</h2><div class=card><div class=bar><i style="width:${pc}%"></i></div><p class=m>${d} / ${t.length} 項任務完成。<a href="#" onclick="go('track');return false">前往追蹤</a></p></div>`},
+profile(){const c=cat();return `<h2>LifeFit Profile：${e(c.name)}</h2><div class=card><div class=grid><div>${fld('貓咪名稱','name')}${fld('品種（可填米克斯）','breed')}${fld('年齡（歲）','age','number')}${fld('體重（公斤）','weight','number')}</div><div>${sel('體型','size',['小型','中小型','中型','中大型','大型'])}${fld('腿長或相關尺寸（公分，選填）','leg')}${sel('活動能力','ability',['正常','稍受限','明顯受限'])}${fld('已確診健康限制（無則留空）','dx')}</div></div>
+<label>特殊需求</label>${NEEDS.map(n=>`<label style="display:inline-block;margin-right:12px;color:var(--tx)"><input type=checkbox ${c.needs.includes(n)?'checked':''} onchange="tgl('needs','${n}')"> ${n}</label>`).join('')}
+<div class=warn>系統不會依品種推斷疾病；僅使用您輸入的資料。</div></div>${nxt()}`},
+video(){const c=cat();return `<h2>VideoFit：行為觀察</h2><div class=warn><b>Demo 模式：</b>尚未串接影片 AI 模型。下方觀察項目由飼主手動勾選${c.demo?'（示範資料為預填）':''}，不是 AI 分析結果，也不是獸醫診斷。</div>
+<div class=card><b>拍攝引導</b><ol class=m><li>在安全、貓咪熟悉的環境拍攝 10–30 秒。</li><li>拍攝自然的行走、上下沙發或家具。</li><li>請勿誘導或強迫貓咪跳躍。</li></ol><input type=file accept="video/*" capture="environment" onchange="P.video=this.files[0]?URL.createObjectURL(this.files[0]):null;render()">${P.video?`<p><video src="${P.video}" controls playsinline></video></p><p class=m>影片只在本機預覽，未上傳。</p>`:''}</div>
+<div class=card><b>飼主確認的觀察紀錄</b>${OBS.map((o,i)=>`<label style="color:var(--tx)"><input type=checkbox ${c.obs.includes(i)?'checked':''} onchange="tgl('obs',${i})"> ${o}</label>`).join('')}</div>${nxt()}`},
+space(){const s=S.space;return `<h2>SpaceFit：居家空間</h2><div class=warn>尺寸皆由您手動輸入。未取得可靠尺度前，系統不會從單張照片推算真實距離。照片與標記僅暫存於本次瀏覽。</div>
+<div class=card><input type=file accept="image/*" capture="environment" onchange="P.photo=this.files[0]?URL.createObjectURL(this.files[0]):null;P.marks=[];render()">
+<label>標記類型<select onchange="P.mt=this.value">${['沙發','貓砂盆','食碗','水碗','休息區'].map(x=>`<option ${P.mt===x?'selected':''}>${x}</option>`).join('')}</select></label>
+${P.photo?`<p class=m>點擊照片以標記位置</p><div class=ph onclick="mark(event)"><img src="${P.photo}">${P.marks.map(m=>`<span class=dot style="left:${m.x}%;top:${m.y}%">${m.t}</span>`).join('')}</div><p>${P.marks.map((m,i)=>`<span class=tag>${m.t} <a href="#" onclick="P.marks.splice(${i},1);render();return false">✕</a></span> `).join('')}</p>`:'<p class=m>尚未選擇照片（可略過，仍可輸入尺寸）。</p>'}</div>
+<div class=card><div class=grid><div>${sp('沙發高度（公分）','sofaH')}${sp('沙發寬度（公分）','sofaW')}</div><div>${sp('通道寬度（公分）','aisle')}${sp('沙發旁可用地面空間（公分）','free')}<label>地板材質<select onchange="updS('floor',this.value)">${['光滑','一般','防滑'].map(x=>`<option ${s.floor===x?'selected':''}>${x}</option>`).join('')}</select></label></div></div></div>${nxt()}`},
+engine(){const c=cat();return `<h2>Pet Accessibility Engine：${e(c.name)}</h2><p class=m>規則運算（非 AI 模型），結合貓咪資料、活動能力、特殊需求與家具尺寸。</p><div class=warn>💡 評審重點：點上方貓咪切換（Mochi／Kiki），同一個空間的建議會隨個體不同而改變。</div>${recs(c).map(recCard).join('')}
+<h2>個體化對照（同一空間）</h2><div class=card><table><tr>${S.cats.map(x=>`<th>${e(x.name)}（${x.ability}）</th>`).join('')}</tr><tr>${S.cats.map(x=>`<td>${recs(x).map(r=>`${e(r.title)} <span class="tag ${PT[r.prio]}">${r.prio}</span>`).join('<br>')}</td>`).join('')}</tr></table></div>
+<details class=card><summary>規則門檻（未經驗證的參考值）</summary><pre style="white-space:pre-wrap;font-size:12px">${e(JSON.stringify(T,null,1))}</pre></details>${nxt()}`},
+sim(){return `<h2>3D 模擬（非真實 AR）</h2><div class=warn>這是 3D 模擬，不是照片合成，也不是真實相機 AR。iOS AR Quick Look／Android Scene Viewer：尚未串接。拖曳旋轉視角，雙指／滾輪縮放。</div>
+<div class=card><canvas id=cv></canvas><p id=nowebgl class=m></p><div><button class=b2 onclick="addItem('step')">＋低踏階</button><button class=b2 onclick="addItem('ramp')">＋斜坡</button><button class=b2 onclick="addItem('mat')">＋防滑墊</button></div><div id=chips></div>
+<div id=ctl style="display:none"><label>左右位置 <input id=sx type=range min=-150 max=150 oninput="setP('x',this.value)"></label><label>前後位置 <input id=sz type=range min=-20 max=260 oninput="setP('z',this.value)"></label><label>旋轉 <input id=sr type=range min=-180 max=180 oninput="setP('r',this.value)"></label><label>尺寸 % <input id=ss type=range min=50 max=200 oninput="setP('s',this.value)"></label><p id=dim class=m></p><button class=b3 onclick="delItem()">移除此物件</button></div>
+<hr><button onclick="savePlan()">儲存改善方案</button><button class=b2 onclick="shot()">產生預覽截圖</button><button class=b3 onclick="initItems(1);initSim()">重設</button><div id=shots></div></div>${nxt()}`},
+report(){const c=cat(),R=recs(c),sh=P.shots[c.id],pl=S.plan[c.id];return `<h2>改善報告：${e(c.name)}</h2><div class=card><h3>LifeFit 摘要</h3><p>${e(c.breed)}・${c.age} 歲・${c.weight} 公斤・${c.size}・活動能力${c.ability}<br>特殊需求：${c.needs.join('、')||'無'}　診斷：${e(c.dx)||'未填'}<br>飼主觀察：${c.obs.map(i=>OBS[i]).join('、')||'無'}</p></div>
+<h2>空間問題與建議（依優先順序）</h2>${[...R].sort((a,b)=>'高中低'.indexOf(a.prio)-'高中低'.indexOf(b.prio)).map(recCard).join('')}
+<div class=card><h3>改善前後預覽（3D 模擬）</h3>${sh?`<div class=grid><div>改善前<img src="${sh.b}"></div><div>改善後<img src="${sh.a}"></div></div>`:'<p class=m>尚未產生。請到 3D 模擬按「產生預覽截圖」。</p>'}<p class=m>已儲存方案：${pl?pl.length+' 個物件':'尚未儲存'}</p></div>
+<div class=card><h3>可執行任務</h3>${tasks(c).map(t=>`<div>☐ ${e(t.t)}</div>`).join('')||'無'}</div>
+<div class=warn>本報告為規則運算產生的規劃建議，不是診斷，也不保證安全或成效。請觀察貓咪是否願意使用，並諮詢獸醫。</div>
+<button onclick="copyRep()">複製／分享報告文字</button><button class=b2 onclick="print()">列印／另存 PDF</button>${nxt()}`},
+track(){const c=cat(),t=tasks(c),L=S.log[c.id]||[];return `<h2>改善追蹤：${e(c.name)}</h2><div class=card><h3>任務</h3>${t.map(x=>`<label style="color:var(--tx)"><input type=checkbox ${S.done[x.k]?'checked':''} onchange="S.done['${x.k}']=this.checked;save()"> ${e(x.t)}</label>`).join('')||'無'}
+<label>上傳改善後照片<input type=file accept="image/*" onchange="P.after[S.cur]=this.files[0]?URL.createObjectURL(this.files[0]):null;render()"></label>${P.after[c.id]?`<img src="${P.after[c.id]}" style="max-height:220px">`:''}</div>
+<div class=card><h3>使用情況紀錄</h3><label>貓咪是否願意使用新設施<select id=lw>${['願意自行使用','猶豫／觀望','不願意使用','尚未嘗試'].map(x=>`<option>${x}</option>`).join('')}</select></label><label>備註<textarea id=ln rows=2></textarea></label><button onclick="addLog()">新增紀錄</button>
+${L.map(l=>`<p class=m>${l.d}：${e(l.w)}　${e(l.n)}</p>`).join('')}</div>
+<div class=card><h3>改善前後觀察比較</h3><p>改善前（飼主觀察）：${c.obs.map(i=>OBS[i]).join('、')||'無'}<br>改善後（最新紀錄）：${L.length?e(L[L.length-1].w+' '+L[L.length-1].n):'尚無紀錄'}</p><div class=warn>此比較僅為飼主觀察，不能用來宣稱疼痛減輕或疾病改善。如有疑慮請諮詢獸醫。</div></div>`}};
+function mark(ev){const r=ev.currentTarget.getBoundingClientRect();P.marks.push({t:P.mt,x:+((ev.clientX-r.left)/r.width*100).toFixed(1),y:+((ev.clientY-r.top)/r.height*100).toFixed(1)});render()}
+function addLog(){const c=cat();(S.log[c.id]=S.log[c.id]||[]).push({d:new Date().toLocaleDateString('zh-TW'),w:$('lw').value,n:$('ln').value});save();render();toast('已新增紀錄')}
+function copyRep(){const c=cat(),t=`HomePaw LifeFit AI 改善報告：${c.name}\n`+recs(c).map(r=>`【${r.prio}】${r.title}\n問題：${r.problem}\n建議：${r.fix}\n人工確認：${r.confirm}`).join('\n\n')+'\n\n※ 規劃建議，非獸醫診斷。';
+ try{if(navigator.share){navigator.share({text:t}).catch(()=>{})}else navigator.clipboard.writeText(t).then(()=>toast('已複製'))}catch(x){prompt('複製以下文字',t)}}
+function render(){$('app').innerHTML=`<nav>${STEPS.map(s=>`<button class="${s[0]===PG?'cur':''}" onclick="go('${s[0]}')">${s[1]}</button>`).join('')}</nav><main${TOUR.on?' style="padding-bottom:230px"':''}><div>${S.cats.map(c=>`<button class="b2 ${c.id===S.cur?'on':''}" onclick="pick('${c.id}')">🐱 ${e(c.name)}</button>`).join('')}</div>${V[PG]()}</main>${tourHtml()}`}
+
+const cmp=()=>`<table><tr>${S.cats.map(x=>`<th>${e(x.name)}（${x.age} 歲・${x.ability}）</th>`).join('')}</tr><tr>${S.cats.map(x=>`<td>${recs(x).map(r=>`${e(r.title)} <span class="tag ${PT[r.prio]}">${r.prio}</span>`).join('<br>')}</td>`).join('')}</tr></table>`;
+// ===== 範例導覽 =====
+const TOUR={on:false,i:0},TS=[
+{p:'home',t:'歡迎！這個導覽會用示範貓咪 Mochi（12 歲、沙發 45 公分）帶你走完整個流程。所有資料皆為示範資料。'},
+{p:'profile',t:'① 建立 LifeFit Profile：Mochi 12 歲、活動能力「稍受限」、尚無獸醫診斷。系統不會依品種推斷疾病，你可以直接修改任何欄位。'},
+{p:'video',t:'② VideoFit（Demo）：這裡的觀察是飼主手動勾選的，不是 AI 分析。Mochi 已勾選「上沙發前停頓」與「下沙發時猶豫」。你也可以上傳自己的影片預覽。'},
+{p:'space',t:'③ SpaceFit：沙發高 45 公分、地板光滑、沙發旁可用空間 80 公分。尺寸由你手動輸入，也可上傳照片並點擊標記。'},
+{p:'engine',t:'④ 規則引擎：Mochi 會得到踏階、斜坡、防滑墊與獸醫建議。切換到 Kiki，看同一空間為何建議不同。',b:[['切換 Kiki 對照',"pick('kiki')"],['切回 Mochi',"pick('mochi')"]]},
+{p:'sim',t:'⑤ 3D 模擬（非真實 AR）：已自動放入建議的踏階與防滑墊。拖曳畫面旋轉視角，用滑桿移動、旋轉、縮放。按「下一步」會自動儲存方案並產生前後截圖。'},
+{p:'report',t:'⑥ 改善報告：整理摘要、依優先順序的建議、改善前後預覽與任務，可複製分享或列印。'},
+{p:'track',t:'⑦ 改善追蹤：勾選任務、記錄 Mochi 是否願意使用，再比較前後觀察。導覽到此結束，你可以繼續自由操作。'}];
+function startTour(){S.cur='mochi';S.space=JSON.parse(JSON.stringify(DEF.space));delete S.plan.mochi;G.items=[];G.cat=null;TOUR.on=true;TOUR.i=0;go(TS[0].p)}
+function tourGo(d){if(PG==='sim'&&d>0&&G.snap)savePlan();const i=TOUR.i+d;if(i<0)return;if(i>=TS.length){endTour();return}TOUR.i=i;go(TS[i].p)}
+function endTour(){TOUR.on=false;render()}
+function tourHtml(){if(!TOUR.on)return'';const s=TS[TOUR.i];return `<div id=tour><b>範例導覽 ${TOUR.i+1}/${TS.length}</b><p style="margin:4px 0">${s.t}</p>${(s.b||[]).map(b=>`<button class=b2 onclick="${b[1]}">${b[0]}</button>`).join('')}<button class=b3 onclick="tourGo(-1)">← 上一步</button><button onclick="tourGo(1)">${TOUR.i===TS.length-1?'完成':'下一步 →'}</button><button class=b3 onclick="endTour()">結束導覽</button></div>`}
+
+// ===== 3D 模擬器 =====
+function initItems(force){const c=cat();if(G.cat===c.id&&!force&&G.items.length)return;G.cat=c.id;
+ G.items=S.plan[c.id]&&!force?JSON.parse(JSON.stringify(S.plan[c.id])):recs(c).filter(r=>r.obj==='step'||(r.obj==='mat'&&r.prio==='中')).map(r=>mkItem(r.obj));G.sel=G.items.length?0:-1}
+function mkItem(t){const L=Math.round(S.space.sofaH*T.rampRatio);return {t,x:0,z:t==='ramp'?L:t==='mat'?70:15,r:0,s:100}}
+function addItem(t){G.items.push(mkItem(t));G.sel=G.items.length-1;ui()}
+function delItem(){G.items.splice(G.sel,1);G.sel=G.items.length-1;ui()}
+const NM={step:'低踏階',ramp:'斜坡',mat:'防滑墊'};
+function setP(k,v){const it=G.items[G.sel];if(it){it[k]=+v;dimTxt();G.rb()}}
+function dimTxt(){const it=G.items[G.sel];if(!it)return;const k=it.s/100,h=S.space.sofaH,n=Math.max(1,Math.ceil(h/T.stepRise)-1);let t;
+ if(it.t==='step'){const top=n*T.stepRise*k;t=`${n} 階｜寬 ${Math.round(T.stepWidth*k)}｜深 ${Math.round(T.stepDepth*n*k)}｜頂高 ${Math.round(top)} 公分｜與沙發差 ${Math.round(h-top)} 公分`}
+ else if(it.t==='ramp'){const L=h*T.rampRatio*k;t=`長 ${Math.round(L)}｜高 ${Math.round(h*k)}｜寬 ${Math.round(40*k)} 公分${L>S.space.free?'｜⚠ 超過可用空間 '+S.space.free+' 公分':''}`}
+ else t=`長 ${Math.round(60*k)}｜寬 ${Math.round(40*k)} 公分`;$('dim').textContent=t+'（模擬尺寸，需實際量測確認）'}
+function ui(){$('chips').innerHTML=G.items.map((it,i)=>`<button class="${i===G.sel?'':'b3'}" onclick="G.sel=${i};ui()">${NM[it.t]} ${i+1}</button>`).join('');const it=G.items[G.sel];$('ctl').style.display=it?'block':'none';
+ if(it){$('sx').value=it.x;$('sz').value=it.z;$('sr').value=it.r;$('ss').value=it.s;dimTxt()}if(G.rb)G.rb()}
+function savePlan(){shot(1);S.plan[cat().id]=JSON.parse(JSON.stringify(G.items));save();toast('已儲存改善方案')}
+function shot(q){if(!G.snap)return;const o=G.snap();P.shots[cat().id]=o;if(!q)$('shots').innerHTML=`<div class=grid><div>改善前<img src="${o.b}"></div><div>改善後<img src="${o.a}"></div></div>`}
+function initSim(){const cv=$('cv');let r;try{r=new THREE.WebGLRenderer({canvas:cv,antialias:true,preserveDrawingBuffer:true})}catch(x){$('nowebgl').textContent='此瀏覽器不支援 WebGL，無法顯示 3D 模擬。';return}
+ const W=cv.clientWidth||340,H=360;r.setSize(W,H,false);const sc=new THREE.Scene();sc.background=new THREE.Color(0xf1ede2);
+ const cam=new THREE.PerspectiveCamera(45,W/H,1,3000);sc.add(new THREE.AmbientLight(0xffffff,.75));const dl=new THREE.DirectionalLight(0xffffff,.6);dl.position.set(150,300,200);sc.add(dl);
+ const M=c=>new THREE.MeshLambertMaterial({color:c}),s=S.space;
+ const fl=new THREE.Mesh(new THREE.PlaneGeometry(600,500),M(0xe2d9c6));fl.rotation.x=-Math.PI/2;fl.position.z=100;sc.add(fl);
+ const gr=new THREE.GridHelper(600,30,0xbbb3a0,0xcfc7b4);gr.position.set(0,.3,100);sc.add(gr);
+ const sofa=new THREE.Mesh(new THREE.BoxGeometry(s.sofaW,s.sofaH,85),M(0xb8a99a));sofa.position.set(0,s.sofaH/2,-42.5);sc.add(sofa);
+ const IG=new THREE.Group();sc.add(IG);let yaw=.5,pit=.45,dist=330;
+ function body(it){const g=new THREE.Group(),n=Math.max(1,Math.ceil(s.sofaH/T.stepRise)-1);
+  if(it.t==='step')for(let i=0;i<n;i++){const h=(i+1)*T.stepRise,b=new THREE.Mesh(new THREE.BoxGeometry(T.stepWidth,h,T.stepDepth),M(0x7fb08a));b.position.set(0,h/2,(n-1-i)*T.stepDepth);g.add(b)}
+  else if(it.t==='ramp'){const L=s.sofaH*T.rampRatio,sh=new THREE.Shape();sh.moveTo(0,0);sh.lineTo(L,0);sh.lineTo(L,s.sofaH);const gm=new THREE.ExtrudeGeometry(sh,{depth:40,bevelEnabled:false});gm.rotateY(Math.PI/2);gm.translate(-20,0,0);g.add(new THREE.Mesh(gm,M(0x8fbf9f)))}
+  else{const gm=new THREE.BoxGeometry(60,.8,40);gm.translate(0,.4,0);g.add(new THREE.Mesh(gm,M(0xc9825b)))}
+  return g}
+ G.rb=()=>{while(IG.children.length)IG.remove(IG.children[0]);G.items.forEach((it,i)=>{const g=body(it);g.position.set(it.x,0,it.z);g.rotation.y=-it.r*Math.PI/180;g.scale.setScalar(it.s/100);if(i===G.sel)g.traverse(o=>{if(o.material)o.material.emissive=new THREE.Color(0x333300)});IG.add(g)})};
+ G.snap=()=>{IG.visible=false;r.render(sc,cam);const b=cv.toDataURL('image/jpeg',.7);IG.visible=true;r.render(sc,cam);return{b,a:cv.toDataURL('image/jpeg',.7)}};
+ let dr=null;cv.onpointerdown=ev=>{dr=[ev.clientX,ev.clientY];cv.setPointerCapture(ev.pointerId)};cv.onpointerup=()=>dr=null;
+ cv.onpointermove=ev=>{if(!dr)return;yaw-=(ev.clientX-dr[0])*.01;pit=Math.max(.05,Math.min(1.4,pit+(ev.clientY-dr[1])*.01));dr=[ev.clientX,ev.clientY]};
+ cv.onwheel=ev=>{ev.preventDefault();dist=Math.max(150,Math.min(700,dist+ev.deltaY*.3))};
+ (function loop(){cam.position.set(dist*Math.sin(yaw)*Math.cos(pit),dist*Math.sin(pit)+30,dist*Math.cos(yaw)*Math.cos(pit)+60);cam.lookAt(0,25,40);r.render(sc,cam);G.raf=requestAnimationFrame(loop)})();ui()}
+render();
+</script></body></html>
